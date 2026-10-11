@@ -1,0 +1,15 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# secret keys
+.env*
+
+# other
+*.log
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
