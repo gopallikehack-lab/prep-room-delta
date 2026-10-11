@@ -1,12 +1,8 @@
-# ⚠️ PUT YOUR REAL TURNSTILE SITE KEY WHERE IT SAYS ""PASTE_SITE_KEY""
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
 
-// ─── BOSS MAN: HARDCODE YOUR TURNSTILE SITE KEY HERE ─────────────────
-const TURNSTILE_SITE_KEY = "0x4AAAAAAFT_hsr9d14T35I3";
-// ─────────────────────────────────────────────────────────────────────
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
 declare global {
   interface Window {
@@ -17,29 +13,30 @@ declare global {
 }
 
 export default function InterviewSimulator() {
-  // ── Security gate state ──
   const [verified, setVerified] = useState(false);
   const [gateStatus, setGateStatus] = useState<'checking' | 'verified' | 'error'>('checking');
 
-  // ── App state ──
   const [mode, setMode] = useState<'practice' | 'test'>('practice');
   const [persona, setPersona] = useState('strict');
   const [userResponse, setUserResponse] = useState('');
   const [aiFeedback, setAiFeedback] = useState<any>(null);
   const [bodyLanguageStatus] = useState('Calm & Eye Contact Maintained');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // ── Turnstile callbacks ──
   useEffect(() => {
-    window.onTurnstileSuccess = () => {
+    window.onTurnstileSuccess = (token: string) => {
+      setTurnstileToken(token);
       setGateStatus('verified');
-      setTimeout(() => setVerified(true), 900); // brief "verified" flash
+      setTimeout(() => setVerified(true), 900);
     };
-    window.onTurnstileExpired = () => setGateStatus('checking');
+    window.onTurnstileExpired = () => {
+      setTurnstileToken(null);
+      setGateStatus('checking');
+    };
     window.onTurnstileError = () => setGateStatus('error');
   }, []);
 
-  // ── Camera (only runs after gate opens) ──
   useEffect(() => {
     if (!verified) return;
     async function setupCamera() {
@@ -54,30 +51,39 @@ export default function InterviewSimulator() {
   }, [verified]);
 
   const handleResponseSubmit = async () => {
+    if (!turnstileToken) {
+      setAiFeedback({ error: 'Security check expired. Refresh the page.' });
+      return;
+    }
     const res = await fetch('/api/groq-interview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        action: 'turn',
         mode,
         role: 'Software Engineer',
         company: 'Google',
         persona,
         userResponse,
         recentTrends: 'Generative AI Integration and System Resilience',
+        messages: userResponse ? [{ role: 'user', content: userResponse }] : [],
+        config: {
+          role: 'Software Engineer',
+          company: 'Google',
+          style: persona,
+          mode: mode,
+        },
+        turnstileToken,
       }),
     });
     const data = await res.json();
     setAiFeedback(data);
   };
 
-  // ═══════════════════════════════════════════════════════════════════
-  //  SECURITY GATE SCREEN — full-page professional loader
-  // ═══════════════════════════════════════════════════════════════════
   if (!verified) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-6">
-          {/* Animated shield */}
           <div className="relative">
             <div className="absolute inset-0 rounded-full bg-cyan-500/20 animate-ping" />
             <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
@@ -93,7 +99,6 @@ export default function InterviewSimulator() {
             </div>
           </div>
 
-          {/* Title */}
           <div className="text-center">
             <h1 className="text-2xl font-bold text-white mb-2">
               {gateStatus === 'verified' ? 'Access Granted' : 'Security System Checking'}
@@ -107,7 +112,6 @@ export default function InterviewSimulator() {
             </p>
           </div>
 
-          {/* Progress bar */}
           <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
             <div
               className={`h-full bg-gradient-to-r from-cyan-500 to-blue-600 transition-all duration-500 ${
@@ -116,7 +120,6 @@ export default function InterviewSimulator() {
             />
           </div>
 
-          {/* Turnstile widget — invisible until it needs interaction */}
           {gateStatus !== 'verified' && (
             <div className="flex flex-col items-center gap-2">
               <p className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">
@@ -135,16 +138,13 @@ export default function InterviewSimulator() {
           )}
 
           {gateStatus === 'verified' && (
-            <p className="text-xs text-cyan-400 font-medium"> Welcome User </p>
+            <p className="text-xs text-cyan-400 font-medium">Welcome</p>
           )}
         </div>
       </div>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  //  MAIN APP — only renders after verification passes
-  // ═══════════════════════════════════════════════════════════════════
   return (
     <div className="min-h-screen bg-slate-950 p-6 flex justify-center items-center">
       <div className="w-full max-w-4xl bg-slate-900 text-white p-6 rounded-xl shadow-2xl border border-slate-800">
@@ -210,11 +210,23 @@ export default function InterviewSimulator() {
 
         {aiFeedback && (
           <div className="mt-6 p-4 bg-slate-800 rounded-lg border border-cyan-500/30">
-            <h2 className="text-xl font-bold text-cyan-300 mb-2">
-              Next Question: {aiFeedback.nextQuestion}
-            </h2>
-            <p className="text-slate-300 mb-2">Feedback: {aiFeedback.feedback}</p>
-            <div className="text-yellow-400 font-semibold">Score: {aiFeedback.score}/10</div>
+            {aiFeedback.error ? (
+              <p className="text-red-400 text-sm">{aiFeedback.error}</p>
+            ) : (
+              <>
+                <h2 className="text-xl font-bold text-cyan-300 mb-2">
+                  Next Question: {aiFeedback.reply || aiFeedback.nextQuestion || '—'}
+                </h2>
+                <p className="text-slate-300 mb-2">
+                  {aiFeedback.coachTip || aiFeedback.feedback || ''}
+                </p>
+                {typeof aiFeedback.score === 'number' && (
+                  <div className="text-yellow-400 font-semibold">
+                    Score: {aiFeedback.score}/10
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>
