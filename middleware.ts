@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 
+// ── In-memory rate limiter (swap for Upstash Redis in prod) ──
 const RATE_LIMIT = new Map<string, number[]>();
 const MAX_REQUESTS = 60;
 const WINDOW_MS = 60_000;
@@ -42,7 +43,7 @@ export function middleware(req: NextRequest) {
     "unknown";
 
   if (isRateLimited(ip)) {
-    return new NextResponse(" Too many requests, pls try again later.", {
+    return new NextResponse("Too many requests. Please slow down.", {
       status: 429,
       headers: SECURITY_HEADERS,
     });
@@ -50,7 +51,7 @@ export function middleware(req: NextRequest) {
 
   const BAD_PATHS = [/\.(php|asp|aspx|jsp)$/i, /wp-admin/i, /\.env/i, /\.git/i];
   if (BAD_PATHS.some((re) => re.test(req.nextUrl.pathname))) {
-    return new NextResponse(" Nope.", { status: 403, headers: SECURITY_HEADERS });
+    return new NextResponse("Not found.", { status: 403, headers: SECURITY_HEADERS });
   }
 
   const res = NextResponse.next();
