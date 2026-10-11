@@ -12,9 +12,8 @@ import type {
   Message,
   SetupConfig,
 } from "@/lib/types";
+import { verifyTurnstile, getClientIp } from "@/lib/turnstile";
 
-// If Groq retires this model, pick a new one at
-// console.groq.com/docs/models and change only this line.
 const MODEL = "openai/gpt-oss-120b";
 
 type Raw = Record<string, unknown>;
@@ -93,6 +92,14 @@ export async function POST(req: Request) {
     body = (await req.json()) as Raw;
   } catch {
     return NextResponse.json({ error: "Bad request." }, { status: 400 });
+  }
+
+  const human = await verifyTurnstile(body.turnstileToken, getClientIp(req));
+  if (!human) {
+    return NextResponse.json(
+      { error: "Captcha verification failed. Please refresh and try again." },
+      { status: 403 }
+    );
   }
 
   const config = parseConfig(body.config);
