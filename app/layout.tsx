@@ -27,11 +27,9 @@ export default function RootLayout({
         <ParticleBackground />
         <div className="relative z-10 flex-1 flex flex-col">{children}</div>
         <Script
-          src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-          strategy="afterInteractive"
-          async
-          defer
-        />
+  src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+  strategy="afterInteractive"
+/>
       </body>
     </html>
   );
