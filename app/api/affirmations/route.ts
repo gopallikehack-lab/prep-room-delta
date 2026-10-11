@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
+import { verifyTurnstile, getClientIp } from "@/lib/turnstile";
 
-// Use the same model name as in your other routes.
 const MODEL = "openai/gpt-oss-120b";
 
 type Raw = Record<string, unknown>;
@@ -31,6 +31,14 @@ export async function POST(req: Request) {
     body = (await req.json()) as Raw;
   } catch {
     return NextResponse.json({ error: "Bad request." }, { status: 400 });
+  }
+
+  const human = await verifyTurnstile(body.turnstileToken, getClientIp(req));
+  if (!human) {
+    return NextResponse.json(
+      { error: "Captcha verification failed. Please refresh and try again." },
+      { status: 403 }
+    );
   }
 
   const goals = asList(body.goals, 8)
